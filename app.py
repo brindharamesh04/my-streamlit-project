@@ -4,7 +4,7 @@
 # ============================================================
 
 import os
-
+from huggingface_hub import hf_hub_download
 import numpy as np
 import torch
 import torch.nn as nn
@@ -268,17 +268,33 @@ section[data-testid="stSidebar"] .stButton button:hover { background: #2dd4bf; }
 # ------------------------------------------------------------
 # Model loading (cached, silent)
 # ------------------------------------------------------------
+
+# ------------------------------------------------------------
+# Model loading from Hugging Face (cached)
+# ------------------------------------------------------------
 @st.cache_resource
 def load_model():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Download the model from Hugging Face
+    model_path = hf_hub_download(
+        repo_id="BRINDHARAMESH/diabetic-retinopathy-model",
+        filename="best_convnext_model.pth",
+        repo_type="model",
+    )
+
+    # Create the ConvNeXt-Tiny architecture
     model = timm.create_model("convnext_tiny", pretrained=False)
     in_features = model.head.fc.in_features
     model.head.fc = nn.Linear(in_features, NUM_CLASSES)
 
-    loaded = os.path.exists(MODEL_PATH)
-    if loaded:
-        state_dict = torch.load(MODEL_PATH, map_location=device)
-        model.load_state_dict(state_dict)
+    # Load the trained weights
+    state_dict = torch.load(
+        model_path,
+        map_location=device,
+        weights_only=True,
+    )
+    model.load_state_dict(state_dict)
 
     model = model.to(device)
     model.eval()
@@ -287,11 +303,17 @@ def load_model():
         return tensor.permute(0, 3, 1, 2)
 
     target_layers = [model.stages[-1].blocks[-1].conv_dw]
-    cam_extractor = GradCAM(model=model, target_layers=target_layers, reshape_transform=reshape_transform)
-    return model, cam_extractor, device, loaded
+    cam_extractor = GradCAM(
+        model=model,
+        target_layers=target_layers,
+        reshape_transform=reshape_transform,
+    )
+
+    return model, cam_extractor, device, True
 
 
 model, cam_extractor, device, model_loaded = load_model()
+
 
 infer_transform = transforms.Compose([
     transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
