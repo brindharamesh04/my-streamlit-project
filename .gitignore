@@ -4,3 +4,4 @@ __pycache__/
 venv/
 .env
 best_convnext_model.pth
+.streamlit/secrets.toml
